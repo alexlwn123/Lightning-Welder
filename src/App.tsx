@@ -17,7 +17,7 @@ function App() {
         </div>
 
         <p className="w-full text-lg sm:text-xl text-gray-300 mt-8 text-center font-mono">
-          <b>Lightning Welder</b> lets legacy lightning wallets pay <b>bolt12 offers</b>.
+          <b>Lightning Welder</b> helps legacy lightning wallets pay <b>bolt12 offers</b>.
         </p>
 
         <Section>

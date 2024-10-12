@@ -3,7 +3,8 @@ name: Deploy Lightning Welder to GitHub Pages
 on:
   # Using github pages for docs instead of preview
   push:
-  branches: ['main']
+    branches: ['main']
+
   workflow_dispatch:
 
 permissions:

@@ -1,6 +1,6 @@
 # Lightning Welder
 
-Lightning Welder lets legacy lightning wallets pay bolt12 offers.
+Lightning Welder helps legacy lightning wallets pay bolt12 offers.
 
 ## Try it out
 

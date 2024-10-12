@@ -1,4 +1,4 @@
-import boltsImg from '../assets/bolts.png'
+import boltsImg from '/bolts.png'
 
 export function BoltBlock() {
   return (

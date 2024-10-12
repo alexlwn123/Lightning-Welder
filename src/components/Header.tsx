@@ -1,5 +1,5 @@
 import React from 'react';
-import backgroundImg from '../assets/background.png'; // Adjust the path as needed
+import backgroundImg from '/background.png'; // Adjust the path as needed
 
 const Header: React.FC = () => {
   return (

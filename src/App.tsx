@@ -1,13 +1,13 @@
 import './App.css'
-import Header from '@/components/Header'
-import { BoltBlock } from '@/components/BoltBlock'
+import { Background } from './components/Background'
+import { BoltBlock } from './components/BoltBlock'
 import { Section } from './components/ui/section'
 import { WeldFormComponent } from './components/weld-form'
 
 function App() {
   return (
     <div className="bg-gradient-to-br from-gray-900 to-black/90 min-h-screen px-6 sm:px-20">
-      <Header />
+      <Background />
       <main className="flex flex-col items-center justify-center py-10 sm:pt-20 max-w-5xl">
         <h1 className="text-3xl sm:text-6xl font-extrabold mb-8 text-center text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-green-500 font-mono whitespace-nowrap">
           Lightning Welder

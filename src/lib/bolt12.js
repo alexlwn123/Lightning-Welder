@@ -11,7 +11,7 @@ export const createConfig = () => {
     const relay = "wss://nostrue.com";
 
     // node pubkey of lightning provider
-    const welder = "57f2a0e744842f7948762463adfdf989258cad476570b52299560353bb0a67a0";
+    const welder = "a9e0692d4530f62e0ee0b3451f344fb01c46641830e3c97f6c9a7d28fa021f91";
 
     return { privkey, pubkey, relay, welder };
 }

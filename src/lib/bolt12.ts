@@ -8,6 +8,8 @@ declare module "./bolt12.js" {
   export function request_bolt11(
     config: any,
     fetched_event: any,
-    amount: number
+    amount: number,
+    onBolt11: (bolt11: string) => void,
+    onPaid: () => void
   ): Promise<string>;
 }

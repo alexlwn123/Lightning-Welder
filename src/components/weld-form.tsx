@@ -23,10 +23,16 @@ const submitOffer = async (config: ReturnType<typeof createConfig>, offer: strin
   return result;
 };
 
-const weldInvoice = async (config: ReturnType<typeof createConfig>, fetched_event: object, amount: number) => {
+const weldInvoice = async (
+  config: ReturnType<typeof createConfig>,
+  fetched_event: object,
+  amount: number,
+  onBolt11: (bolt11: string) => void,
+  onPaid: () => void
+) => {
   //TODO
   // const result = await submit_bolt12(config, offer);
-  const result = await request_bolt11(config, fetched_event, amount);
+  const result = await request_bolt11(config, fetched_event, amount, onBolt11, onPaid);
   return result;
 };
 
@@ -38,6 +44,7 @@ export function WeldFormComponent() {
   const [result, setResult] = useState<object>();
   const [bolt11Invoice, setBolt11Invoice] = useState("");
   const [config, setConfig] = useState<ReturnType<typeof createConfig>>();
+  const [paid, setPaid] = useState(false);
 
   const clear = () => {
     setBolt11Invoice("");
@@ -51,7 +58,13 @@ export function WeldFormComponent() {
   const handleWeld = () => {
     console.error('WELDING', result)
     if (!result) return;
-    weldInvoice(config, result, amount).then(setBolt11Invoice);
+    weldInvoice(config, result, amount, (bolt11) => {
+      console.log('--------------------BOLT!!!!!!', bolt11)
+      setBolt11Invoice(bolt11)
+    }, () => {
+      console.log('--------------------PAID!!!!!!')
+      setPaid(true);
+    });
   };
 
   useEffect(() => {
@@ -139,6 +152,11 @@ export function WeldFormComponent() {
           size={256}
           qrValue={bolt11Invoice}
         />
+      )}
+      {paid && (
+        <div className="text-lg sm:text-4xl font-bold mb-4 text-green-500 font-mono tracking-wide animate-pulse whitespace-nowrap">
+          Paid!
+        </div>
       )}
     </div>
   );

@@ -59,7 +59,7 @@ export const submit_bolt12 = async (config, bolt12, amount) => {
  * @param {ReturnType<typeof submit_bolt12>} fetched_event 
  * @returns 
  */
-export const request_bolt11 = async (config, fetched_event, amount) => {
+export const request_bolt11 = async (config, fetched_event, amount, onBolt11, onPaid) => {
 
     const bolt12_info = JSON.parse(fetched_event.content);
     console.log(bolt12_info, amount);
@@ -101,6 +101,8 @@ export const request_bolt11 = async (config, fetched_event, amount) => {
     }
     const fetched_event2 = await loop2();
     const bolt11_info = JSON.parse(fetched_event2.content);
+    // Setus up QR
+    onBolt11(bolt11_info.bolt11);
     console.log('------------', bolt11_info);
     const now3 = Math.floor(Date.now() / 1000);
     const loop1 = async () => {
@@ -136,7 +138,10 @@ export const request_bolt11 = async (config, fetched_event, amount) => {
         }
         const status = await loop2();
         console.log(JSON.parse(status.content));
-        if (JSON.parse(status.content) === "SETTLED") return;
+        if (JSON.parse(status.content) === "SETTLED") {
+            onPaid();
+            return;
+        }
         return loop1();
     }
     await loop1();

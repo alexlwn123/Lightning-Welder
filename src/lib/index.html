@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no">
+        <script src="https://bundle.run/bech32@2.0.0"></script>
+        <script type="module" src="https://supertestnet.github.io/weld/index.js"></script>
+        <script src="https://supertestnet.github.io/bankify/super_nostr.js"></script>
+        <script src="https://bundle.run/browserify-cipher@1.0.1"></script>
+        <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
+        <style>
+            * {
+                box-sizing: border-box;
+                font-size: 1.15rem;
+                font-family: Arial, sans-serif;
+            }
+            html {
+                max-width: 800px;
+                padding: 3rem 1rem;
+                margin: auto;
+                line-height: 1.25;
+                padding: 0;
+            }
+            body {
+                margin: 3rem 1rem;
+            }
+            h1 {
+                font-size: 2rem;
+            }
+            h2 {
+                font-size: 1.5rem;
+            }
+            input {
+                line-height: 1.25;
+                width: 100%;
+                height: 1.8rem;
+                font-size: 1.15rem;
+                border: 1px solid grey;
+            }
+            @media screen and (max-width: 600px) {
+            }
+        </style>
+        <script>
+            var $ = document.querySelector.bind( document );
+            var $$ = document.querySelectorAll.bind( document );
+            var url_params = new URLSearchParams( window.location.search );
+            var url_keys = url_params.keys();
+            var $_GET = {}
+            for ( var key of url_keys ) $_GET[ key ] = url_params.get( key );
+        </script>
+    </head>
+    <body>
+        <p>Enter bolt12 offer</p>
+        <p><input class="bolt12"></p>
+        <p><button class="submit_bolt12">Submit</button></p>
+        <script>
+            var bytesToHex = bytes => bytes.reduce( ( str, byte ) => str + byte.toString( 16 ).padStart( 2, "0" ), "" );
+            var hexToBytes = hex => Uint8Array.from( hex.match( /.{1,2}/g ).map( byte => parseInt( byte, 16 ) ) );
+            function hexToBech32( prefix, hex ) {
+                var words = bech32.bech32.toWords( hexToBytes( hex ) );
+                return bech32.bech32.encode( prefix, words, 100_000 );
+            }
+            var waitSomeSeconds = num => {
+                var num = num.toString() + "000";
+                num = Number( num );
+                return new Promise( resolve => setTimeout( resolve, num ) );
+            }
+            var init = async () => {
+                var privkey = super_nostr.bytesToHex( nobleSecp256k1.utils.randomPrivateKey() );
+                var pubkey = nobleSecp256k1.getPublicKey( privkey, true ).substring( 2 );
+                var relay = "wss://nostrue.com";
+                var welder = "e57b2aba3d6a2f04a701bc8e1cd89cfc14ef0224fd0d47b12224e22ed7907f46";
+                var bolt12 = $( '.bolt12' ).value;
+                console.log( 'loading...' );
+                var amt = 15;
+                var msg = JSON.stringify({
+                    bolt12,
+                    amt,
+                });
+                var emsg = super_nostr.encrypt( privkey, welder, msg );
+                var event = await super_nostr.prepEvent( privkey, emsg, 4, [ [ "p", welder ] ] );
+                console.log( event );
+                super_nostr.sendEvent( event, relay );
+                var loop = async () => {
+                    await waitSomeSeconds( 5 );
+                    var ids = null;
+                    var authors = null;
+                    var kinds = [ 4 ];
+                    var until = null;
+                    var since = null;
+                    var limit = 1;
+                    var etags = null;
+                    var ptags = [ pubkey ];
+                    var events = await super_nostr.getEvents( relay, ids, authors, kinds, until, since, limit, etags, ptags );
+                    if ( !events.length ) return loop();
+                    var event = events[ 0 ];
+                    try {
+                        event.content = super_nostr.decrypt( privkey, event.pubkey, event.content );
+                    } catch ( e ) {}
+                    console.log( event );
+                }
+                loop();
+            }
+
+            var submitBolt12 = async () => {
+                //mybolt12: lno1zrxq8pjw7qjlm68mtp7e3yvxee4y5xrgjhhyf2fxhlphpckrvevh50u0qw8el7egdp0cj45dgy9e6dnd9d977ln9j05zczvutllx9cqxz7dhjqsrc7nc438y9n92e4nh37u53wz3hlk9jf47407k0vmevdckn8tvlqqqqvlhzx6vm7nhzgqlevawx4jtls0uu92njlnm8vs5wfakq6yjd7t4q74etz58d7mpmj0ds4xssafhpnrldee4qd7gufdjxgug7hqnyz8cwvnyv20r7z0gx72mnxnrtyky9vt6zdax6qqspl3j8mdshslkn34mclfpj80zag
+                //bluematt's bolt12: lno1qsg9q8pftww8jt5j7ntrdupx0sf8wyxvqfcsq3pv8dulvphcpuezmxx5n8h0evrqtx00ch2wevqzp8pvk4qeqquxpk87kltng20c2sjly6f0yvd7fcs6wwgufaqkcjgat2shuex5jvpq9vsyj8ja72qzg50t5m4cy2c60kqc4fzjs6ks04n4wfaeftwtd539qqejvmmvmk8f2g0pknzmgt6y8dgue43wk9s6h9j4372wadrax5c98m6dvuq92xmzjz5qzh4y95uz5nq9gplgcqe2r7wnjrnh3gsl89mxdr6pdfhqyde7xuav6al34eq6yayh3wg0d5qpqg7ayzwakfw5tg9wullpd8phafgkyyp7ap9ll6mha7kf0l0aa04pqz52ffm9rvmtr42a35r8jx0ut6yxsuc
+                var bolt12 = $( '.bolt12' ).value;
+                console.log( 'loading...' );
+                var amt = 15;
+                // bolt12 = `lno1qsg95t28fvk7aefdum96rgwq3psqzyxvqfcsq3pv8dulvphcpuezmxx5n8h0evrqtx00ch2wevqzp8pvk4qeqqhw37mc9659ses3xkamaksfd9dspq6gkgmvzcl7eppzd3er2w80rgpq9ys6szwh4e33p82jmu42e9zgay44rhg6whr4gq9l6xe6jd7penguqqeua845ptusy3xs5wxwrytm9ck6dh8l739jmw2rfsu8nudvtef90hfn4aj55aw0ezxxf2excmead9vaqvjtuq6s9a580e85rz8mdvp26kuc5vr2llmuexrgxhxx66l400275a3535qpqvemxtpdvuvrwh83qkjl53eagqckyypeq87wey4833z750a5kr5ppfzemeuhtemw6jpty2gznf76zakkj0c`;
+                var bolt12_info = await fetch( `http://localhost:8081/?offer_to_convert=${bolt12}&amount=${amt}` );
+                bolt12_info = await bolt12_info.text();
+                bolt12_info = bolt12_info.replaceAll( "\n", "" );
+                bolt12_info = JSON.parse( bolt12_info );
+                console.log( 'loaded!' );
+                console.log( bolt12_info );
+                if ( bolt12_info[ "amount_msats" ] !== amt * 1000 ) return alert( `aborting because middleman tried to scam you!` );
+                var amt_to_pay = amt + 10;
+                var timelock_to_use = bolt12_info[ "cltv_expiry_delta" ] + 10;
+                var bolt11_info = await fetch( `http://localhost:8081/?get_bolt11=true&amt=${amt_to_pay}&pmthash=${bolt12_info[ "payment_hash" ]}&timelock=${timelock_to_use}` );
+                bolt11_info = await bolt11_info.text();
+                bolt11_info = bolt11_info.replaceAll( "\n", "" );
+                bolt11_info = JSON.parse( bolt11_info );
+                console.log( bolt11_info );
+                var loop = async () => {
+                    await waitSomeSeconds( 1 );
+                    var status = await fetch( `http://localhost:8081/?check_status=true&pmthash=${bolt12_info[ "payment_hash" ]}` );
+                    status = await status.text();
+                    status = status.replaceAll( "\n", "" );
+                    status = JSON.parse( status );
+                    console.log( status );
+                    if ( status[ "status" ] === "SETTLED" ) return;
+                    return loop();
+                }
+                await loop();
+                console.log( 'settled!' );
+            }
+            $( '.submit_bolt12' ).onclick = init;
+            (async()=>{
+                await waitSomeSeconds( 1 );
+                var bolt12 = await bolt12parser.init( "https://supertestnet.github.io/weld/boltz_bolt12_bg.wasm" );
+            })();
+            // var bytesToHex = bytes => bytes.reduce( ( str, byte ) => str + byte.toString( 16 ).padStart( 2, "0" ), "" );
+            // function hexToBech32( prefix, hex ) {
+            //     var words = bech32.bech32m.toWords( hexToBytes( hex ) );
+            //     return bech32.bech32m.encode( prefix, words, 100_000 );
+            // }
+            // var offer = null;
+            // var run = async () => {
+            //     await waitSomeSeconds( 1 );
+            //     var bolt12 = await bolt12parser.init( "https://supertestnet.github.io/weld/boltz_bolt12_bg.wasm" );
+            //     offer = new bolt12parser.Offer( "lno1qsg95t28fvk7aefdum96rgwq3psqzyxvqfcsq3pv8dulvphcpuezmxx5n8h0evrqtx00ch2wevqzp8pvk4qeqqhw37mc9659ses3xkamaksfd9dspq6gkgmvzcl7eppzd3er2w80rgpq9ys6szwh4e33p82jmu42e9zgay44rhg6whr4gq9l6xe6jd7penguqqeua845ptusy3xs5wxwrytm9ck6dh8l739jmw2rfsu8nudvtef90hfn4aj55aw0ezxxf2excmead9vaqvjtuq6s9a580e85rz8mdvp26kuc5vr2llmuexrgxhxx66l400275a3535qpqvemxtpdvuvrwh83qkjl53eagqckyypeq87wey4833z750a5kr5ppfzemeuhtemw6jpty2gznf76zakkj0c" );
+            //     // offer.free();
+            // };
+            // run();
+        </script>
+    </body>
+</html>

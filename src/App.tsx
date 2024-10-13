@@ -1,6 +1,7 @@
 import './App.css'
 import { Background } from './components/Background'
 import { BoltBlock } from './components/BoltBlock'
+import { Footer } from './components/Footer'
 import { Section } from './components/ui/section'
 import { WeldFormComponent } from './components/weld-form'
 
@@ -37,6 +38,7 @@ function App() {
           </div>
         </Section>
       </main>
+      <Footer />
     </div>
   )
 }

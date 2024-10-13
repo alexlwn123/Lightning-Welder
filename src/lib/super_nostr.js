@@ -1,0 +1,268 @@
+import * as nobleSecp256k1 from "noble-secp256k1";
+function getMessageEncoding(message) {
+  const enc = new TextEncoder();
+  return enc.encode(message);
+}
+
+function encryptMessage(key, text) {
+  const encoded = getMessageEncoding(text);
+  // iv will be needed for decryption
+  const iv = window.crypto.getRandomValues(new Uint8Array(16));
+  return window.crypto.subtle.encrypt(
+    { name: "AES-CBC", iv },
+    key,
+    encoded,
+  );
+}
+
+
+export const super_nostr = {
+  sockets: {},
+  hexToBytes: hex => Uint8Array.from(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))),
+  bytesToHex: bytes => bytes.reduce((str, byte) => str + byte.toString(16).padStart(2, "0"), ""),
+  base64ToHex: str => {
+    var raw = atob(str);
+    var result = '';
+    var i; for (i = 0; i < raw.length; i++) {
+      var hex = raw.charCodeAt(i).toString(16);
+      result += hex.length % 2 ? '0' + hex : hex;
+    }
+    return result.toLowerCase();
+  },
+  hexToBase64: hex => btoa(hex.match(/\w{2}/g).map(a => String.fromCharCode(parseInt(a, 16))).join("")),
+  base64ToBytes: str => {
+    var raw = atob(str);
+    var result = [];
+    var i; for (i = 0; i < raw.length; i++) result.push(raw.charCodeAt(i));
+    return new Uint8Array(result);
+  },
+  getPrivkey: () => super_nostr.bytesToHex(nobleSecp256k1.utils.randomPrivateKey()),
+  getPubkey: privkey => nobleSecp256k1.getPublicKey(privkey, true).substring(2),
+  sha256: async text_or_bytes => { if (typeof text_or_bytes === "string") text_or_bytes = (new TextEncoder().encode(text_or_bytes)); return super_nostr.bytesToHex(await nobleSecp256k1.utils.sha256(text_or_bytes)) },
+  waitSomeSeconds: num => {
+    var num = num.toString() + "000";
+    num = Number(num);
+    return new Promise(resolve => setTimeout(resolve, num));
+  },
+  getEvents: async (relay_or_socket, ids, authors, kinds, until, since, limit, etags, ptags) => {
+    var socket_is_permanent = false;
+    if (typeof relay_or_socket !== "string") socket_is_permanent = true;
+    if (typeof relay_or_socket === "string") var socket = new WebSocket(relay_or_socket);
+    else var socket = relay_or_socket;
+    var events = [];
+    var opened = false;
+    if (socket_is_permanent) {
+      var subId = super_nostr.bytesToHex(nobleSecp256k1.utils.randomPrivateKey()).substring(0, 16);
+      var filter = {}
+      if (ids) filter.ids = ids;
+      if (authors) filter.authors = authors;
+      if (kinds) filter.kinds = kinds;
+      if (until) filter.until = until;
+      if (since) filter.since = since;
+      if (limit) filter.limit = limit;
+      if (etags) filter["#e"] = etags;
+      if (ptags) filter["#p"] = ptags;
+      var subscription = ["REQ", subId, filter];
+      socket.send(JSON.stringify(subscription));
+      return;
+    }
+    socket.addEventListener('message', async function (message) {
+      var [type, subId, event] = JSON.parse(message.data);
+      var { kind, content } = event || {}
+      if (!event || event === true) return;
+      events.push(event);
+    });
+    socket.addEventListener('open', async function (e) {
+      opened = true;
+      var subId = super_nostr.bytesToHex(nobleSecp256k1.utils.randomPrivateKey()).substring(0, 16);
+      var filter = {}
+      if (ids) filter.ids = ids;
+      if (authors) filter.authors = authors;
+      if (kinds) filter.kinds = kinds;
+      if (until) filter.until = until;
+      if (since) filter.since = since;
+      if (limit) filter.limit = limit;
+      if (etags) filter["#e"] = etags;
+      if (ptags) filter["#p"] = ptags;
+      var subscription = ["REQ", subId, filter];
+      socket.send(JSON.stringify(subscription));
+    });
+    var loop = async () => {
+      if (!opened) {
+        await super_nostr.waitSomeSeconds(1);
+        return await loop();
+      }
+      var len = events.length;
+      await super_nostr.waitSomeSeconds(1);
+      if (len !== events.length) return await loop();
+      socket.close();
+      return events;
+    }
+    return await loop();
+  },
+  prepEvent: async (privkey, msg, kind, tags) => {
+    const pubkey = super_nostr.getPubkey(privkey);
+    if (!tags) tags = [];
+    var event = {
+      "content": msg,
+      "created_at": Math.floor(Date.now() / 1000),
+      kind,
+      tags,
+      pubkey,
+    }
+    const signedEvent = await super_nostr.getSignedEvent(event, privkey);
+    return signedEvent;
+  },
+  sendEvent: (event, relay_or_socket) => {
+    var socket_is_permanent = false;
+    if (typeof relay_or_socket !== "string") socket_is_permanent = true;
+    if (typeof relay_or_socket === "string") var socket = new WebSocket(relay_or_socket);
+    else var socket = relay_or_socket;
+    if (!socket_is_permanent) {
+      socket.addEventListener('open', async () => {
+        socket.send(JSON.stringify(["EVENT", event]));
+        setTimeout(() => { socket.close(); }, 1000);
+      });
+    } else {
+      socket.send(JSON.stringify(["EVENT", event]));
+    }
+    return event.id;
+  },
+  getSignedEvent: async (event, privkey) => {
+    var eventData = JSON.stringify([
+      0,
+      event['pubkey'],
+      event['created_at'],
+      event['kind'],
+      event['tags'],
+      event['content'],
+    ]);
+    event.id = await super_nostr.sha256(eventData);
+    event.sig = await nobleSecp256k1.schnorr.sign(event.id, privkey);
+    return event;
+  },
+  encrypt: async (privkey, pubkey, text) => {
+    console.warn('ENCRYPT BEGIN', text, '\npubkey:', pubkey, '\nprivkey:', privkey)
+    var msg = (new TextEncoder()).encode(text);
+    var iv = window.crypto.getRandomValues(new Uint8Array(16));
+    var key_raw = super_nostr.hexToBytes(nobleSecp256k1.getSharedSecret(privkey, '02' + pubkey, true).substring(2));
+    var key = await window.crypto.subtle.importKey(
+      "raw",
+      key_raw,
+      "AES-CBC",
+      false,
+      ["encrypt", "decrypt"],
+    );
+    var emsg = await window.crypto.subtle.encrypt(
+      {
+        name: "AES-CBC",
+        iv,
+      },
+      key,
+      msg,
+    )
+    emsg = new Uint8Array(emsg);
+    var arr = emsg;
+    emsg = super_nostr.hexToBase64(super_nostr.bytesToHex(emsg)) + "?iv=" + btoa(String.fromCharCode.apply(null, iv));
+    console.warn('ENCRYPT END', emsg)
+    return emsg;
+  },
+
+  decrypt: async (privkey, pubkey, ciphertext) => {
+    var [emsg, iv] = ciphertext.split("?iv=");
+    var key_raw = super_nostr.hexToBytes(nobleSecp256k1.getSharedSecret(privkey, '02' + pubkey, true).substring(2));
+    var key = await window.crypto.subtle.importKey(
+      "raw",
+      key_raw,
+      "AES-CBC",
+      false,
+      ["encrypt", "decrypt"],
+    );
+    var decrypted = await window.crypto.subtle.decrypt(
+      {
+        name: "AES-CBC",
+        iv: super_nostr.base64ToBytes(iv),
+      },
+      key,
+      super_nostr.base64ToBytes(emsg),
+    );
+
+    var msg = (new TextDecoder()).decode(decrypted);
+    return msg;
+  },
+
+  // encrypt: (privkey, pubkey, text) => {
+  //   var key = nobleSecp256k1.getSharedSecret(privkey, '02' + pubkey, true).substring(2);
+  //   var iv = window.crypto.getRandomValues(new Uint8Array(16));
+  //   var c = cipher.createCipheriv('aes-256-cbc', super_nostr.hexToBytes(key), iv);
+  //   var encryptedMessage = c.update(text, "utf8", "base64");
+  //   emsg = encryptedMessage + c.final("base64");
+  //   var uint8View = new Uint8Array(iv.buffer);
+  //   var decoder = new TextDecoder();
+  //   return emsg + "?iv=" + btoa(String.fromCharCode.apply(null, uint8View));
+  // },
+  // decrypt: (privkey, pubkey, ciphertext) => {
+  //   var [emsg, iv] = ciphertext.split("?iv=");
+  //   var key = nobleSecp256k1.getSharedSecret(privkey, '02' + pubkey, true).substring(2);
+  //   var decipher = window.crypto.createDecipheriv(
+  //     'aes-256-cbc',
+  //     super_nostr.hexToBytes(key),
+  //     super_nostr.hexToBytes(super_nostr.base64ToHex(iv))
+  //   );
+  //   var decryptedMessage = decipher.update(emsg, "base64");
+  //   dmsg = decryptedMessage + decipher.final("utf8");
+  //   return dmsg;
+  // },
+  newPermanentConnection: (relay, listenFunction, handleFunction) => {
+    var socket_id = super_nostr.bytesToHex(nobleSecp256k1.utils.randomPrivateKey()).substring(0, 16);
+    super_nostr.sockets[socket_id] = { socket: null, connection_failure: false }
+    super_nostr.connectionLoop(0, relay, socket_id, listenFunction, handleFunction);
+    return socket_id;
+  },
+  connectionLoop: async (tries = 0, relay, socket_id, listenFunction, handleFunction) => {
+    var socketRetrieverFunction = socket_id => {
+      return super_nostr.sockets[socket_id]["socket"];
+    }
+    var socketReplacerFunction = (socket_id, socket) => {
+      super_nostr.sockets[socket_id]["socket"] = socket;
+      super_nostr.sockets[socket_id]["connection_failure"] = false;
+    }
+    var socketFailureCheckerFunction = socket_id => {
+      return super_nostr.sockets[socket_id]["connection_failure"];
+    }
+    var socketFailureSetterFunction = socket_id => {
+      return super_nostr.sockets[socket_id]["connection_failure"] = true;
+    }
+    if (socketFailureCheckerFunction(socket_id)) return alert(`your connection to nostr failed and could not be restarted, please refresh the page`);
+    var socket = socketRetrieverFunction(socket_id);
+    if (!socket) {
+      var socket = new WebSocket(relay);
+      socket.addEventListener('message', handleEvent);
+      socket.addEventListener('open', () => { listen(socket); });
+      socketReplacerFunction(socket_id, socket);
+    }
+    if (socket.readyState === 1) {
+      await super_nostr.waitSomeSeconds(1);
+      return super_nostr.connectionLoop(0, relay, socket_id, listenFunction, handleFunction);
+    }
+    // if there is no connection, check if we are still connecting
+    // give it two chances to connect if so
+    if (socket.readyState === 0 && !tries) {
+      await super_nostr.waitSomeSeconds(1);
+      return super_nostr.connectionLoop(1, relay, socket_id, listenFunction, handleFunction);
+    }
+    if (socket.readyState === 0 && tries) {
+      socketFailureSetterFunction(socket_id);
+      return;
+    }
+    // otherwise, it is either closing or closed
+    // ensure it is closed, then make a new connection
+    socket.close();
+    await super_nostr.waitSomeSeconds(1);
+    socket = new WebSocket(relay);
+    socket.addEventListener('message', handleFunction);
+    socket.addEventListener('open', () => { listenFunction(socket); });
+    socketReplacerFunction(socket_id, socket);
+    await super_nostr.connectionLoop(0, relay, socket_id, listenFunction, handleFunction);
+  }
+}

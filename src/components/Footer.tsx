@@ -6,7 +6,7 @@ export function Footer() {
       <footer className="flex items-center gap-2 font-mono text-3xl">
       FOSS
       <a
-        href="https://github.com/alexlwn123/lastpaywins"
+          href="https://github.com/alexlwn123/Lightning-Welder"
           target="_blank"
           rel="noreferrer"
         >
